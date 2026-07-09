@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="vendor/autoload.php"
+         colors="true"
+>
+    <testsuites>
+        <testsuite name="Feature">
+            <directory>tests/Feature</directory>
+        </testsuite>
+    </testsuites>
+    <source>
+        <include>
+            <directory>src</directory>
+        </include>
+    </source>
+    <php>
+        <env name="APP_ENV" value="testing"/>
+        <env name="APP_DEBUG" value="true"/>
+        <env name="DB_CONNECTION" value="sqlite"/>
+        <env name="DB_DATABASE" value=":memory:"/>
+        <env name="ADMIN_EMAIL" value="admin.testing@example.test"/>
+        <env name="ADMIN_NAME" value="Admin Test"/>
+        <env name="ADMIN_PASSWORD" value="TestAdminPassword12"/>
+        <env name="JWT_SECRET" value="test-jwt-secret-at-least-32-characters"/>
+        <env name="JWT_TTL" value="60"/>
+        <env name="JWT_REFRESH_TTL" value="20160"/>
+        <env name="SYSTEM_API_TOKEN" value="test-system-token"/>
+        <env name="FRONTEND_URLS" value="http://localhost:5173,http://127.0.0.1:5173"/>
+    </php>
+</phpunit>
