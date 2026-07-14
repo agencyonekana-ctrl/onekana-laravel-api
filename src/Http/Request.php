@@ -22,6 +22,9 @@ final class Request
     {
         $uri = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
         $headers = function_exists('getallheaders') ? getallheaders() : [];
+        if (! isset($headers['Cookie']) && isset($_SERVER['HTTP_COOKIE'])) {
+            $headers['Cookie'] = $_SERVER['HTTP_COOKIE'];
+        }
 
         return new self(
             strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET'),
@@ -70,6 +73,22 @@ final class Request
         }
 
         return trim($matches[1]);
+    }
+
+    public function cookie(string $key, ?string $default = null): ?string
+    {
+        $header = (string) $this->header('Cookie', '');
+        foreach (array_filter(array_map('trim', explode(';', $header))) as $pair) {
+            if (! str_contains($pair, '=')) {
+                continue;
+            }
+            [$name, $value] = explode('=', $pair, 2);
+            if (trim($name) === $key) {
+                return urldecode(trim($value));
+            }
+        }
+
+        return $default;
     }
 
     public function ip(): string

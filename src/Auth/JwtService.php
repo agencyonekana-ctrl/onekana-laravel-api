@@ -16,6 +16,7 @@ final class JwtService
         $jti = bin2hex(random_bytes(16));
         $payload = [
             'iss' => Env::get('APP_URL', 'onekana-api'),
+            'aud' => Env::get('JWT_AUDIENCE', 'onekana-business-manager'),
             'iat' => $now,
             'nbf' => $now,
             'exp' => $now + $ttl,
@@ -50,6 +51,14 @@ final class JwtService
         $payload = $this->base64UrlDecodeJson($encodedPayload);
 
         if (($header['alg'] ?? null) !== 'HS256' || ($header['typ'] ?? null) !== 'JWT') {
+            throw new HttpException(401, 'Unauthenticated.');
+        }
+
+        if (($payload['iss'] ?? null) !== Env::get('APP_URL', 'onekana-api')) {
+            throw new HttpException(401, 'Unauthenticated.');
+        }
+
+        if (($payload['aud'] ?? null) !== Env::get('JWT_AUDIENCE', 'onekana-business-manager')) {
             throw new HttpException(401, 'Unauthenticated.');
         }
 

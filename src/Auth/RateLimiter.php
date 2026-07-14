@@ -35,6 +35,24 @@ final class RateLimiter
         $statement->execute(['email' => mb_strtolower($email), 'ip' => $ip]);
     }
 
+    public function throttle(string $key, string $ip, int $max, int $decaySeconds): bool
+    {
+        $threshold = gmdate('Y-m-d H:i:s', time() - $decaySeconds);
+        $cleanup = $this->pdo->prepare('DELETE FROM rate_limit_attempts WHERE created_at < :threshold');
+        $cleanup->execute(['threshold' => $threshold]);
+
+        $count = $this->pdo->prepare('SELECT COUNT(*) FROM rate_limit_attempts WHERE key_name = :key_name AND ip_address = :ip');
+        $count->execute(['key_name' => $key, 'ip' => $ip]);
+        if ((int) $count->fetchColumn() >= $max) {
+            return false;
+        }
+
+        $insert = $this->pdo->prepare('INSERT INTO rate_limit_attempts (key_name, ip_address, created_at) VALUES (:key_name, :ip, :created_at)');
+        $insert->execute(['key_name' => $key, 'ip' => $ip, 'created_at' => Clock::now()]);
+
+        return true;
+    }
+
     private function clearOld(int $decaySeconds): void
     {
         $threshold = gmdate('Y-m-d H:i:s', time() - $decaySeconds);

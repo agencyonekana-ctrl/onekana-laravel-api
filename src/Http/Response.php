@@ -10,6 +10,7 @@ final class Response
         public readonly int $status,
         public readonly array $payload = [],
         public readonly array $headers = [],
+        public readonly ?string $body = null,
     ) {}
 
     public static function json(array $payload, int $status = 200, array $headers = []): self
@@ -22,9 +23,20 @@ final class Response
         return new self(204);
     }
 
+    public static function binary(string $body, string $mimeType, string $filename): self
+    {
+        $safeName = str_replace(["\r", "\n", '"'], '', basename($filename));
+        return new self(200, [], [
+            'Content-Type' => $mimeType,
+            'Content-Disposition' => 'attachment; filename="'.$safeName.'"',
+            'Content-Length' => (string) strlen($body),
+            'Cache-Control' => 'private, no-store, max-age=0',
+        ], $body);
+    }
+
     public function withHeaders(array $headers): self
     {
-        return new self($this->status, $this->payload, [...$this->headers, ...$headers]);
+        return new self($this->status, $this->payload, [...$this->headers, ...$headers], $this->body);
     }
 
     public function send(): void
@@ -34,7 +46,9 @@ final class Response
             header($key.': '.$value);
         }
 
-        if ($this->status !== 204) {
+        if ($this->body !== null) {
+            echo $this->body;
+        } elseif ($this->status !== 204) {
             echo Json::encode($this->payload);
         }
     }

@@ -1,0 +1,1413 @@
+openapi: 3.0.3
+info:
+  title: Onekana Agency API
+  version: 1.0.0
+  description: |
+    Bienvenue sur la documentation officielle de l'API de **Onekana Agency**.
+    
+    Cette API propulse le gestionnaire d'agence de Onekana (Onekana Business Manager) en fournissant des services d'authentification, de gestion des utilisateurs, de création et suivi de campagnes publicitaires, d'accès aux données géographiques (communes, points chauds, trajets), et de gestion de la relation client (CRM Contacts).
+    
+    ### Commencer (Getting Started)
+    Pour commencer à utiliser l'API, vous devez vous inscrire via l'endpoint `/auth.php?action=register` puis vous connecter via `/auth.php?action=login` afin d'obtenir un jeton d'authentification (JWT/Bearer Token).
+    
+    ### Authentification
+    Toutes les requêtes sécurisées nécessitent l'inclusion du jeton dans l'en-tête HTTP `Authorization` :
+    ```http
+    Authorization: Bearer <votre_token_ici>
+    ```
+    
+    ### Codes de Statut HTTP
+    L'API utilise les codes de réponse HTTP standard :
+    - **200 OK** : La requête a réussi.
+    - **201 Created** : La création de la ressource a réussi.
+    - **400 Bad Request** : Paramètres manquants ou invalides.
+    - **401 Unauthorized** : Token absent, invalide ou expiré.
+    - **403 Forbidden** : Droits insuffisants (ex. requiert le rôle administrateur).
+    - **404 Not Found** : La ressource demandée n'existe pas.
+    - **409 Conflict** : Conflit d'unicité (ex. email déjà utilisé).
+    - **422 Unprocessable Entity** : Échec de validation des données fournies.
+    - **500 Internal Server Error** : Une erreur interne est survenue sur le serveur.
+  contact:
+    name: Support Technique Onekana
+    email: tech@onekana-agency.com
+    url: https://onekana-agency.com
+
+servers:
+  - url: https://api.onekana-agency.com
+    description: Serveur de Production API
+  - url: http://localhost/onekana/api
+    description: Serveur de Développement Local (XAMPP)
+
+security:
+  - BearerAuth: []
+
+tags:
+  - name: Authentification
+    description: Endpoints pour la gestion des sessions utilisateurs (inscription, connexion et profil).
+  - name: Utilisateurs
+    description: Gestion des comptes utilisateurs (CRUD). Réservé aux administrateurs pour la plupart des actions.
+  - name: Campagnes
+    description: Création et gestion des campagnes publicitaires d'affichage et mobiles.
+  - name: Données Géographiques - Communes
+    description: Requêtes sur les communes de déploiement.
+  - name: Données Géographiques - Points Chauds
+    description: Gestion des zones à forte fréquentation ou points de transport.
+  - name: Données Géographiques - Trajets
+    description: Trajets, lignes de transport et requêtes géospatiales.
+  - name: CRM Contacts
+    description: Suivi des prospects et clients de l'agence (pipeline commercial).
+
+paths:
+  # -------------------------------------------------------------
+  # AUTHENTICATION
+  # -------------------------------------------------------------
+  /auth.php:
+    post:
+      tags:
+        - Authentification
+      summary: Actions d'authentification (Connexion & Inscription)
+      description: Permet à un utilisateur de se connecter ou de créer un compte selon la valeur du paramètre `action`.
+      parameters:
+        - name: action
+          in: query
+          required: true
+          description: L'action d'authentification à effectuer.
+          schema:
+            type: string
+            enum: [login, register]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/LoginRequest'
+                - $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '200':
+          description: Connexion réussie.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '201':
+          description: Inscription réussie.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterResponse'
+        '401':
+          description: Identifiants incorrects.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Données de validation incorrectes.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+      x-codeSamples:
+        - lang: cURL
+          label: Connexion (cURL)
+          source: |
+            curl -X POST "https://api.onekana-agency.com/auth.php?action=login" \
+              -H "Content-Type: application/json" \
+              -d '{"email": "user@example.com", "password": "securepassword123"}'
+        - lang: JavaScript
+          label: Connexion (Fetch)
+          source: |
+            fetch('https://api.onekana-agency.com/auth.php?action=login', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                email: 'user@example.com',
+                password: 'securepassword123'
+              })
+            })
+            .then(res => res.json())
+            .then(data => console.log(data));
+
+    get:
+      tags:
+        - Authentification
+      summary: Profil de l'utilisateur connecté
+      description: Récupère les détails du profil de l'utilisateur actuellement authentifié par son jeton Bearer.
+      parameters:
+        - name: action
+          in: query
+          required: true
+          description: Doit être défini sur `profile`.
+          schema:
+            type: string
+            enum: [profile]
+      responses:
+        '200':
+          description: Profil récupéré avec succès.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  user:
+                    $ref: '#/components/schemas/User'
+        '401':
+          description: Non authentifié ou token expiré.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      x-codeSamples:
+        - lang: cURL
+          label: Profil (cURL)
+          source: |
+            curl -X GET "https://api.onekana-agency.com/auth.php?action=profile" \
+              -H "Authorization: Bearer <votre_token>"
+        - lang: JavaScript
+          label: Profil (Fetch)
+          source: |
+            fetch('https://api.onekana-agency.com/auth.php?action=profile', {
+              method: 'GET',
+              headers: { 'Authorization': 'Bearer ' + localStorage.getItem('authToken') }
+            })
+            .then(res => res.json())
+            .then(data => console.log(data));
+
+  # -------------------------------------------------------------
+  # USERS
+  # -------------------------------------------------------------
+  /users.php:
+    get:
+      tags:
+        - Utilisateurs
+      summary: Liste des utilisateurs ou détails d'un utilisateur
+      description: Si le paramètre `action` est `get_all`, retourne la liste paginée des utilisateurs. Si `action` est `get_by_id`, retourne un utilisateur spécifique.
+      parameters:
+        - name: action
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [get_all, get_by_id]
+        - name: id
+          in: query
+          required: false
+          description: Requis si `action` est `get_by_id`.
+          schema:
+            type: string
+        - name: search
+          in: query
+          required: false
+          description: Terme de recherche (recherche sur email, nom, prénom, entreprise).
+          schema:
+            type: string
+        - name: role
+          in: query
+          required: false
+          description: Filtrer par rôle.
+          schema:
+            type: string
+            enum: [admin, client, user, seller]
+        - name: limit
+          in: query
+          required: false
+          description: Nombre maximum d'éléments à retourner (max 200, défaut 50).
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          required: false
+          description: Décalage pour la pagination.
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Opération réussie.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    properties:
+                      success:
+                        type: boolean
+                        example: true
+                      users:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/User'
+                      total:
+                        type: integer
+                        example: 15
+                      limit:
+                        type: integer
+                        example: 50
+                      offset:
+                        type: integer
+                        example: 0
+                  - type: object
+                    properties:
+                      success:
+                        type: boolean
+                        example: true
+                      user:
+                        $ref: '#/components/schemas/User'
+        '401':
+          description: Non authentifié.
+        '404':
+          description: Utilisateur introuvable (si get_by_id).
+
+    post:
+      tags:
+        - Utilisateurs
+      summary: Actions d'écriture sur les utilisateurs (Créer, Mettre à jour, Supprimer)
+      description: Gère la création, modification et suppression des utilisateurs via des requêtes POST structurées par le paramètre `action`.
+      parameters:
+        - name: action
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [create, update, delete]
+        - name: id
+          in: query
+          required: false
+          description: Identifiant de l'utilisateur ciblé pour les actions `update` et `delete`.
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/UserCreateRequest'
+                - $ref: '#/components/schemas/UserUpdateRequest'
+      responses:
+        '200':
+          description: Mise à jour ou suppression effectuée avec succès.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Opération réussie."
+        '201':
+          description: Utilisateur créé avec succès.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Utilisateur créé avec succès."
+                  user_id:
+                    type: string
+                    example: "48291039"
+        '404':
+          description: Utilisateur non trouvé.
+        '422':
+          description: Données manquantes ou invalides.
+
+  # -------------------------------------------------------------
+  # CAMPAIGNS
+  # -------------------------------------------------------------
+  /campaigns.php:
+    get:
+      tags:
+        - Campagnes
+      summary: Liste des campagnes ou détails d'une campagne
+      description: Récupère soit toutes les campagnes (filtrées par `user_id` pour les non-admins), soit une campagne spécifique.
+      parameters:
+        - name: action
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [get_all, get_by_id]
+        - name: id
+          in: query
+          required: false
+          description: Identifiant de la campagne (requis si `action` est `get_by_id`).
+          schema:
+            type: string
+        - name: user_id
+          in: query
+          required: false
+          description: Filtrer par utilisateur (les admins peuvent voir toutes les campagnes si non fourni).
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Opération réussie.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    properties:
+                      success:
+                        type: boolean
+                        example: true
+                      campaigns:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Campaign'
+                  - type: object
+                    properties:
+                      success:
+                        type: boolean
+                        example: true
+                      campaign:
+                        $ref: '#/components/schemas/Campaign'
+        '404':
+          description: Campagne introuvable.
+
+    post:
+      tags:
+        - Campagnes
+      summary: Créer, modifier ou supprimer une campagne
+      description: Gère le cycle de vie d'une campagne publicitaire.
+      parameters:
+        - name: action
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [create, update, delete]
+        - name: id
+          in: query
+          required: false
+          description: Identifiant de la campagne (requis pour `update` et `delete`).
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/CampaignCreateRequest'
+                - $ref: '#/components/schemas/CampaignUpdateRequest'
+      responses:
+        '200':
+          description: Campagne modifiée ou supprimée avec succès.
+        '201':
+          description: Campagne créée avec succès.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Campaign created successfully"
+                  campaign_id:
+                    type: string
+                    example: "937402849"
+                  campaign:
+                    $ref: '#/components/schemas/Campaign'
+        '422':
+          description: Validation échouée.
+
+  # -------------------------------------------------------------
+  # GEOGRAPHIC
+  # -------------------------------------------------------------
+  /geographic.php:
+    get:
+      tags:
+        - Données Géographiques - Communes
+        - Données Géographiques - Points Chauds
+        - Données Géographiques - Trajets
+      summary: Récupérer des entités géographiques
+      description: Permet d'extraire la liste globale ou les détails d'une entité de type `communes`, `points_chauds` ou `trajets`.
+      parameters:
+        - name: entity
+          in: query
+          required: true
+          description: L'entité géographique ciblée.
+          schema:
+            type: string
+            enum: [communes, points_chauds, trajets]
+        - name: action
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [get_all, get_by_id]
+        - name: id
+          in: query
+          required: false
+          description: Identifiant de l'entité (requis pour `get_by_id`).
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Données récupérées avec succès.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: array
+                    items:
+                      $ref: '#/components/schemas/Commune'
+                  - type: array
+                    items:
+                      $ref: '#/components/schemas/PointChaud'
+                  - type: array
+                    items:
+                      $ref: '#/components/schemas/Trajet'
+                  - $ref: '#/components/schemas/Commune'
+                  - $ref: '#/components/schemas/PointChaud'
+                  - $ref: '#/components/schemas/Trajet'
+        '404':
+          description: Ressource géographique introuvable.
+
+    post:
+      tags:
+        - Données Géographiques - Communes
+        - Données Géographiques - Points Chauds
+        - Données Géographiques - Trajets
+      summary: Gérer les entités géographiques (Création, Modification, Suppression)
+      description: Gère la création, modification ou suppression d'une commune, d'un point chaud ou d'un trajet.
+      parameters:
+        - name: entity
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [communes, points_chauds, trajets]
+        - name: action
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [create, update, delete]
+        - name: id
+          in: query
+          required: false
+          description: Identifiant requis pour `update` et `delete`.
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Charge utile variant selon l'entité et l'action.
+      responses:
+        '200':
+          description: Opération réussie.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Opération effectuée avec succès."
+        '201':
+          description: Ressource créée avec succès.
+
+  # -------------------------------------------------------------
+  # CRM CONTACTS (Alternative direct paths)
+  # -------------------------------------------------------------
+  /contacts.php:
+    get:
+      tags:
+        - CRM Contacts
+      summary: Liste paginée et filtrée de contacts
+      description: Récupère la liste des contacts de l'agence. Permet de filtrer par étape d'achat, recherche textuelle ou créateur.
+      parameters:
+        - name: id
+          in: query
+          required: false
+          description: Identifiant unique d'un contact pour voir son détail.
+          schema:
+            type: integer
+        - name: search
+          in: query
+          required: false
+          description: Filtrer par nom de l'entreprise, personne de contact ou fonction.
+          schema:
+            type: string
+        - name: etape
+          in: query
+          required: false
+          description: Filtrer par étape commerciale.
+          schema:
+            type: string
+            enum: [prospect, qualification, proposition, negociation, gagne, perdu, inactif]
+        - name: user_id
+          in: query
+          required: false
+          description: Filtrer les contacts créés par un utilisateur spécifique.
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 20
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Succès. Renvoie un tableau de contacts ou un contact unique.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  contacts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Contact'
+                  total:
+                    type: integer
+                    example: 42
+                  limit:
+                    type: integer
+                    example: 20
+                  offset:
+                    type: integer
+                    example: 0
+        '404':
+          description: Contact introuvable.
+
+    post:
+      tags:
+        - CRM Contacts
+      summary: Créer un nouveau contact CRM
+      description: Ajoute un prospect ou un client au pipeline commercial de l'agence.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContactCreateRequest'
+      responses:
+        '201':
+          description: Contact créé.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Contact créé avec succès."
+                  contact:
+                    $ref: '#/components/schemas/Contact'
+        '422':
+          description: Le champ company_name est requis.
+
+    put:
+      tags:
+        - CRM Contacts
+      summary: Modifier un contact CRM existant
+      description: Met à jour les informations d'un contact existant.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContactUpdateRequest'
+      responses:
+        '200':
+          description: Contact mis à jour avec succès.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Contact mis à jour."
+                  contact:
+                    $ref: '#/components/schemas/Contact'
+        '404':
+          description: Contact introuvable.
+
+    delete:
+      tags:
+        - CRM Contacts
+      summary: Supprimer un contact CRM
+      description: Supprime définitivement un contact de la base de données par son ID.
+      parameters:
+        - name: id
+          in: query
+          required: false
+          description: ID du contact à supprimer (peut aussi être passé dans le corps de la requête).
+          schema:
+            type: integer
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id:
+                  type: integer
+                  example: 5
+      responses:
+        '200':
+          description: Contact supprimé avec succès.
+        '404':
+          description: Contact introuvable.
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Saisissez votre jeton JWT obtenu après connexion.
+
+  schemas:
+    # -------------------------------------------------------------
+    # GENERIC
+    # -------------------------------------------------------------
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: string
+          example: "Une erreur est survenue."
+
+    ValidationErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        errors:
+          type: object
+          additionalProperties:
+            type: string
+          example:
+            email: "Format d'adresse e-mail invalide."
+            password: "Le mot de passe doit contenir au moins 8 caractères."
+
+    # -------------------------------------------------------------
+    # AUTH / USER MODELS
+    # -------------------------------------------------------------
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 12
+        user_id:
+          type: string
+          example: "48291039"
+          description: Identifiant généré aléatoirement lors de l'inscription.
+        first_name:
+          type: string
+          example: "Jean"
+        last_name:
+          type: string
+          example: "Dupont"
+        email:
+          type: string
+          example: "jean.dupont@example.com"
+        company:
+          type: string
+          example: "Dupont Médias SARL"
+        employees:
+          type: string
+          example: "10-50"
+        sector:
+          type: string
+          example: "Publicité & Marketing"
+        address:
+          type: string
+          example: "12 Boulevard du 30 Juin, Kinshasa"
+        rccm:
+          type: string
+          example: "CD/KIN/RCCM/22-B-00123"
+        id_nationale:
+          type: string
+          example: "01-93-N12345A"
+        capital:
+          type: string
+          example: "5000000 CDF"
+        website:
+          type: string
+          example: "https://dupont-medias.cd"
+        phone:
+          type: string
+          example: "+243812345678"
+        description:
+          type: string
+          example: "Agence de communication média."
+        logo_path:
+          type: string
+          nullable: true
+          example: "/uploads/logos/logo_48291039.png"
+        role:
+          type: string
+          enum: [admin, client, user, seller]
+          example: "client"
+        is_active:
+          type: boolean
+          example: true
+        created_at:
+          type: string
+          format: date-time
+          example: "2026-06-25T14:30:00Z"
+
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          example: "jean.dupont@example.com"
+        password:
+          type: string
+          format: password
+          example: "securepassword123"
+
+    LoginResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: "Login successful"
+        user:
+          type: object
+          properties:
+            id:
+              type: string
+              example: "48291039"
+            user_id:
+              type: string
+              example: "48291039"
+            email:
+              type: string
+              example: "jean.dupont@example.com"
+            first_name:
+              type: string
+              example: "Jean"
+            last_name:
+              type: string
+              example: "Dupont"
+            company:
+              type: string
+              example: "Dupont Médias"
+            phone:
+              type: string
+              example: "+243812345678"
+            role:
+              type: string
+              example: "client"
+        token:
+          type: string
+          example: "example-token-redacted"
+        permissions:
+          type: object
+          properties:
+            is_admin:
+              type: boolean
+              example: false
+            pages:
+              type: array
+              items:
+                type: object
+                properties:
+                  page:
+                    type: string
+                    example: "dashboard"
+                  droit:
+                    type: string
+                    example: "lecture"
+
+    RegisterRequest:
+      type: object
+      required:
+        - first_name
+        - last_name
+        - email
+        - company
+        - employees
+        - sector
+        - address
+        - rccm
+        - id_nationale
+        - capital
+        - website
+        - phone
+        - description
+        - password
+      properties:
+        first_name:
+          type: string
+          example: "Jean"
+        last_name:
+          type: string
+          example: "Dupont"
+        email:
+          type: string
+          format: email
+          example: "jean.dupont@example.com"
+        company:
+          type: string
+          example: "Dupont Médias"
+        employees:
+          type: string
+          example: "10"
+        sector:
+          type: string
+          example: "Technologie"
+        address:
+          type: string
+          example: "Kinshasa, Gombe"
+        rccm:
+          type: string
+          example: "CD/KIN/RCCM/22-B-00123"
+        id_nationale:
+          type: string
+          example: "01-93-N12345A"
+        capital:
+          type: string
+          example: "10000"
+        website:
+          type: string
+          example: "https://dupont-medias.cd"
+        phone:
+          type: string
+          example: "+243812345678"
+        description:
+          type: string
+          example: "Description de l'entreprise"
+        logo_path:
+          type: string
+          example: "/uploads/default.png"
+        password:
+          type: string
+          minLength: 8
+          example: "securepassword123"
+
+    RegisterResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "User created successfully"
+        user:
+          $ref: '#/components/schemas/User'
+        token:
+          type: string
+          example: "example-token-redacted"
+
+    UserCreateRequest:
+      type: object
+      required:
+        - email
+        - password
+        - first_name
+        - last_name
+      properties:
+        email:
+          type: string
+          format: email
+          example: "user@onekana.com"
+        password:
+          type: string
+          example: "securepassword123"
+        first_name:
+          type: string
+          example: "Alice"
+        last_name:
+          type: string
+          example: "Smith"
+        company:
+          type: string
+          example: "Onekana Agency"
+        phone:
+          type: string
+          example: "+243999999999"
+        role:
+          type: string
+          enum: [admin, client, user, seller]
+          default: "client"
+        is_active:
+          type: integer
+          enum: [0, 1]
+          default: 1
+
+    UserUpdateRequest:
+      type: object
+      required:
+        - user_id
+      properties:
+        user_id:
+          type: string
+          example: "48291039"
+        first_name:
+          type: string
+          example: "Alice"
+        last_name:
+          type: string
+          example: "Smith"
+        company:
+          type: string
+          example: "Onekana Global"
+        phone:
+          type: string
+          example: "+243999999998"
+        email:
+          type: string
+          format: email
+          example: "alice.smith@onekana.com"
+        role:
+          type: string
+          enum: [admin, client, user, seller]
+        is_active:
+          type: integer
+          enum: [0, 1]
+        password:
+          type: string
+          minLength: 8
+
+    # -------------------------------------------------------------
+    # CAMPAIGN MODELS
+    # -------------------------------------------------------------
+    Campaign:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 5
+        campaign_id:
+          type: string
+          example: "847291039"
+        user_id:
+          type: integer
+          example: 12
+        name:
+          type: string
+          example: "Campagne Rentrée Scolaire 2026"
+        description:
+          type: string
+          example: "Affichage routier sur les axes principaux de Kinshasa."
+        campaign_type:
+          type: string
+          example: "affichage"
+        daily_budget:
+          type: number
+          format: float
+          example: 150.00
+        lifetime_budget:
+          type: number
+          format: float
+          example: 4500.00
+        start_time:
+          type: string
+          format: date
+          example: "2026-09-01"
+        end_time:
+          type: string
+          format: date
+          example: "2026-09-30"
+        status:
+          type: string
+          enum: [draft, pending_payment, active, paused, completed]
+          example: "pending_payment"
+        ciblage:
+          type: string
+          example: "Kinshasa Gombe, Limete, 18-35 ans"
+        created_at:
+          type: string
+          format: date-time
+          example: "2026-07-01T10:00:00Z"
+
+    CampaignCreateRequest:
+      type: object
+      required:
+        - name
+        - campaign_type
+      properties:
+        name:
+          type: string
+          example: "Campagne Promo Juillet"
+        campaign_type:
+          type: string
+          example: "mobile_ads"
+        description:
+          type: string
+          example: "Diffusion de bannières sur téléphones mobiles"
+        daily_budget:
+          type: number
+          format: float
+          example: 25.50
+        lifetime_budget:
+          type: number
+          format: float
+          example: 500.00
+        start_time:
+          type: string
+          format: date
+          example: "2026-07-10"
+        end_time:
+          type: string
+          format: date
+          example: "2026-07-31"
+        status:
+          type: string
+          default: "draft"
+          example: "draft"
+        ciblage:
+          type: string
+          example: "Communes résidentielles"
+        user_id:
+          type: string
+          description: (Optionnel pour Admin uniquement) ID de l'utilisateur pour le compte duquel la campagne est créée.
+          example: "48291039"
+
+    CampaignUpdateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          example: "Campagne Rentrée Scolaire Modifiée"
+        description:
+          type: string
+        campaign_type:
+          type: string
+        daily_budget:
+          type: number
+          format: float
+        lifetime_budget:
+          type: number
+          format: float
+        start_time:
+          type: string
+          format: date
+        end_time:
+          type: string
+          format: date
+        status:
+          type: string
+          enum: [draft, pending_payment, active, paused, completed]
+        ciblage:
+          type: string
+
+    # -------------------------------------------------------------
+    # GEOGRAPHIC MODELS
+    # -------------------------------------------------------------
+    Commune:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        nom:
+          type: string
+          example: "Gombe"
+        population:
+          type: integer
+          example: 50000
+        description:
+          type: string
+          example: "Centre d'affaires administratif et diplomatique de Kinshasa."
+
+    PointChaud:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 4
+        nom_point:
+          type: string
+          example: "Rond-point Victoire"
+        type_transport:
+          type: string
+          example: "Gare routière / Taxi"
+        longitude:
+          type: number
+          format: float
+          example: 15.3134
+        latitude:
+          type: number
+          format: float
+          example: -4.3312
+        frequentation:
+          type: integer
+          example: 120000
+          description: Estimation du flux quotidien de personnes.
+        quartier:
+          type: string
+          example: "Matonge"
+
+    Trajet:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 8
+        nom_trajet:
+          type: string
+          example: "Gombe - Kintambo Magasin"
+        start_lat:
+          type: number
+          format: float
+          example: -4.3023
+        start_lng:
+          type: number
+          format: float
+          example: 15.2863
+        end_lat:
+          type: number
+          format: float
+          example: -4.3291
+        end_lng:
+          type: number
+          format: float
+          example: 15.2612
+        line_coordinates:
+          type: string
+          example: "LINESTRING(15.2863 -4.3023, 15.2755 -4.3122, 15.2612 -4.3291)"
+        distance_km:
+          type: number
+          format: float
+          example: 4.85
+        duree_minutes:
+          type: integer
+          example: 20
+        transport_mode:
+          type: string
+          example: "bus"
+        created_at:
+          type: string
+          format: date-time
+          example: "2026-06-20T08:00:00Z"
+
+    # -------------------------------------------------------------
+    # CONTACT MODELS
+    # -------------------------------------------------------------
+    Contact:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        user_id:
+          type: string
+          example: "48291039"
+          description: Identifiant de l'utilisateur créateur du contact.
+        company_name:
+          type: string
+          example: "Vodacom Congo"
+        sectors:
+          type: array
+          items:
+            type: string
+          example: ["Télécommunications", "Technologie"]
+        contact_person:
+          type: string
+          example: "Marc Kabamba"
+        fonction:
+          type: string
+          example: "Directeur Marketing"
+        etape_achat:
+          type: string
+          enum: [prospect, qualification, proposition, negociation, gagne, perdu, inactif]
+          example: "proposition"
+        phones:
+          type: array
+          items:
+            type: string
+          example: ["+243813333333"]
+        emails:
+          type: array
+          items:
+            type: string
+          example: ["m.kabamba@vodacom.cd"]
+        addresses:
+          type: array
+          items:
+            type: string
+          example: ["Avenue de la Justice, Kinshasa Gombe"]
+        survival_action:
+          type: string
+          example: "Relancer le client sur la proposition commerciale."
+        next_contact_date:
+          type: string
+          format: date
+          example: "2026-07-15"
+        support_solicited:
+          type: string
+          example: "Présentation des nouveaux panneaux digitaux."
+        budget:
+          type: number
+          format: float
+          example: 12000.00
+        notes:
+          type: string
+          example: "Très intéressé par l'affichage 3D sur le boulevard."
+        creator_name:
+          type: string
+          example: "Jean Dupont"
+        creator_email:
+          type: string
+          example: "jean.dupont@example.com"
+        created_at:
+          type: string
+          format: date-time
+          example: "2026-06-26T09:15:30Z"
+        updated_at:
+          type: string
+          format: date-time
+          example: "2026-07-02T11:45:00Z"
+
+    ContactCreateRequest:
+      type: object
+      required:
+        - company_name
+      properties:
+        company_name:
+          type: string
+          example: "Airtel Congo RDC"
+        user_id:
+          type: string
+          description: ID de l'utilisateur qui crée le contact (défaut 'system').
+          example: "48291039"
+        sectors:
+          type: array
+          items:
+            type: string
+          example: ["Télécoms"]
+        contact_person:
+          type: string
+          example: "Sarah Mwamba"
+        fonction:
+          type: string
+          example: "Responsable Achat Média"
+        etape_achat:
+          type: string
+          enum: [prospect, qualification, proposition, negociation, gagne, perdu, inactif]
+          default: "prospect"
+        phones:
+          type: array
+          items:
+            type: string
+          example: ["+243825555555"]
+        emails:
+          type: array
+          items:
+            type: string
+          example: ["s.mwamba@airtel.cd"]
+        addresses:
+          type: array
+          items:
+            type: string
+          example: ["Boulevard du 30 Juin, Kinshasa Gombe"]
+        survival_action:
+          type: string
+          example: "Envoyer la grille tarifaire 2026."
+        next_contact_date:
+          type: string
+          format: date
+          example: "2026-07-12"
+        support_solicited:
+          type: string
+        budget:
+          type: number
+          format: float
+          example: 8500.00
+        notes:
+          type: string
+
+    ContactUpdateRequest:
+      type: object
+      required:
+        - id
+      properties:
+        id:
+          type: integer
+          example: 1
+        company_name:
+          type: string
+        sectors:
+          type: array
+          items:
+            type: string
+        contact_person:
+          type: string
+        fonction:
+          type: string
+        etape_achat:
+          type: string
+          enum: [prospect, qualification, proposition, negociation, gagne, perdu, inactif]
+        phones:
+          type: array
+          items:
+            type: string
+        emails:
+          type: array
+          items:
+            type: string
+        addresses:
+          type: array
+          items:
+            type: string
+        survival_action:
+          type: string
+        next_contact_date:
+          type: string
+          format: date
+        support_solicited:
+          type: string
+        budget:
+          type: number
+          format: float
+        notes:
+          type: string

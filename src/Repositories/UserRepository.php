@@ -26,6 +26,11 @@ final class UserRepository
         return $row ?: null;
     }
 
+    public function isActive(array $user): bool
+    {
+        return ! array_key_exists('is_active', $user) || (bool) $user['is_active'];
+    }
+
     public function payload(array $user): array
     {
         return [

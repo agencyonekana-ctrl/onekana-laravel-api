@@ -29,7 +29,7 @@ final class AuthManager
         }
 
         $user = $this->users->findById((int) ($payload['sub'] ?? 0));
-        if (! $user) {
+        if (! $user || ! $this->users->isActive($user)) {
             throw new HttpException(401, 'Unauthenticated.');
         }
 
@@ -40,19 +40,21 @@ final class AuthManager
         return $user;
     }
 
-    public function assertAdminEmail(string $email): void
-    {
-        $adminEmail = Env::get('ADMIN_EMAIL', '');
-        if ($adminEmail === '' || mb_strtolower($email) !== mb_strtolower($adminEmail)) {
-            throw new HttpException(401, 'Identifiants invalides.');
-        }
-    }
-
     public function revokeRequestToken(Request $request): void
     {
         $payload = $request->get('jwt_payload');
         if (is_array($payload) && isset($payload['jti'], $payload['exp'])) {
             $this->revocations->revoke((string) $payload['jti'], (int) $payload['exp']);
+        }
+    }
+
+    public function revokeBearerIfValid(Request $request): void
+    {
+        try {
+            $this->userFromRequest($request);
+            $this->revokeRequestToken($request);
+        } catch (HttpException) {
+            // Logging out must still clear the refresh cookie when the access token expired.
         }
     }
 }

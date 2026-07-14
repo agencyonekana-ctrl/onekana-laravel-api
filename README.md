@@ -1,70 +1,43 @@
 # ONEKANA API
 
-API PHP 8.2 native pour le back office ONEKANA, compatible cPanel.
+Service PHP 8.2 du back office interne ONEKANA, concu pour MySQL/MariaDB et un deploiement cPanel.
 
-## Prérequis
-
-- PHP 8.2+
-- Composer
-- MySQL ou MariaDB
-- Extensions PHP: `pdo_mysql`, `openssl`, `mbstring`, `json`, `fileinfo`
-
-## Installation
-
-```bash
-composer install --no-dev --optimize-autoloader
-cp .env.example .env
-```
-
-Configurer `.env`, puis exécuter:
-
-```bash
-php scripts/migrate.php
-php scripts/seed-admin.php
-```
-
-Après le premier seed, supprimer `ADMIN_PASSWORD` du `.env`. Le mot de passe reste uniquement sous forme de hash en base.
-
-## Déploiement cPanel
-
-Pointer le sous-domaine API vers:
-
-```text
-onekana-api/public
-```
-
-Le fichier `.env`, `src`, `scripts`, `vendor` et les fichiers de configuration doivent rester hors du document root public.
-
-## Variables importantes
-
-- `APP_URL`: URL publique de l’API.
-- `DB_*`: connexion MySQL/MariaDB.
-- `FRONTEND_URLS`: domaines autorisés pour CORS.
-- `SYSTEM_API_TOKEN`: token privé pour `/api/system/*`.
-- `ADMIN_EMAIL`, `ADMIN_NAME`, `ADMIN_PASSWORD`: provisionnement initial admin.
-- `JWT_SECRET`: secret long et unique de signature JWT.
-- `JWT_TTL`: durée des access tokens en minutes.
-
-## Endpoints principaux
-
-- `POST /api/auth/login`
-- `GET /api/auth/me`
-- `POST /api/auth/refresh`
-- `POST /api/auth/logout`
-- `GET /api/system/*` avec header `X-System-Token`
-- Ressources admin `/api/*` avec header `Authorization: Bearer <token>`
-
-## Développement
+## Installation locale
 
 ```bash
 composer install
+cp .env.example .env
 php scripts/migrate.php
 php scripts/seed-admin.php
 php -S 127.0.0.1:8000 -t public
 ```
 
-Tests:
+Apres le premier provisionnement, retirer le mot de passe initial du fichier d'environnement.
+
+## Sessions et securite
+
+- access token court conserve uniquement en memoire par le navigateur;
+- refresh token rotatif en cookie `HttpOnly`, `Secure` en production et `SameSite=Strict`;
+- verification de la signature, de l'expiration, de l'emetteur et de l'audience;
+- isolation tenant, permissions lecture/gestion et limitation des requetes sensibles;
+- documents prives servis uniquement apres controle de session et de tenant;
+- reponses d'erreur JSON, en-tetes de securite, identifiant de requete et journal d'audit.
+
+Les secrets, identifiants Agency et fichiers `.env` ne doivent jamais etre versions ni transmis au frontend.
+
+## Verification
 
 ```bash
-vendor/bin/phpunit
+composer validate --strict
+composer test
+composer audit
+php scripts/check-agency-api.php
 ```
+
+Le diagnostic Agency doit etre execute uniquement dans un environnement autorise. Il ne journalise aucun secret.
+
+## Deploiement
+
+Le document root du sous-domaine doit pointer vers `public`. Installer les dependances sans outils de developpement, appliquer les migrations, puis verifier `/health/live` et `/health/ready`.
+
+La procedure complete, la sauvegarde et le retour arriere sont decrits dans `docs/PRODUCTION_CHECKLIST.md`.

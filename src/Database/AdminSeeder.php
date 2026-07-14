@@ -23,12 +23,19 @@ final class AdminSeeder
     private const PERMISSIONS = [
         '*',
         'dashboard.view',
+        'dashboard.manage',
         'sales.view',
+        'sales.manage',
         'inventory.view',
+        'inventory.manage',
         'operations.view',
+        'operations.manage',
         'team.view',
+        'team.manage',
         'finance.view',
+        'finance.manage',
         'administration.view',
+        'administration.manage',
         'settings.manage',
     ];
 

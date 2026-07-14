@@ -16,5 +16,8 @@
 /.vscode
 /public/storage/*
 !/public/storage/.gitignore
+/storage/*
+!/storage/.gitignore
 /vendor
+/backups
 Thumbs.db

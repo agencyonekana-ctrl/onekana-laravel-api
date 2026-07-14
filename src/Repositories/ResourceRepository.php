@@ -23,7 +23,6 @@ final class ResourceRepository
         'oohSites' => 'ooh_sites',
         'oohSupports' => 'ooh_supports',
         'oohEmplacements' => 'ooh_emplacements',
-        'oohAssets' => 'ooh_assets',
         'oohPricingRules' => 'ooh_pricing_rules',
         'oohCampaigns' => 'ooh_campaigns',
         'oohCampaignLines' => 'ooh_campaign_lines',

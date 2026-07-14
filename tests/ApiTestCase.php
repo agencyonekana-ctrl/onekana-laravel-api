@@ -30,7 +30,11 @@ abstract class ApiTestCase extends BaseTestCase
         putenv('ADMIN_NAME=Admin Test');
         putenv('JWT_SECRET=test-jwt-secret-at-least-32-characters');
         putenv('JWT_TTL=60');
+        putenv('JWT_REFRESH_TTL=20160');
+        putenv('JWT_AUDIENCE=onekana-business-manager');
         putenv('SYSTEM_API_TOKEN=test-system-token');
+        putenv('ENABLE_GEOGRAPHY=true');
+        putenv('ENABLE_ADVANCED_FINANCE=true');
         putenv('FRONTEND_URLS=http://localhost:5173,http://127.0.0.1:5173');
 
         $this->pdo = new PDO('sqlite::memory:');
@@ -65,5 +69,11 @@ abstract class ApiTestCase extends BaseTestCase
     protected function bearer(string $token): array
     {
         return ['Authorization' => 'Bearer '.$token];
+    }
+
+    protected function refreshCookie(Response $response): array
+    {
+        $header = (string) ($response->headers['Set-Cookie'] ?? '');
+        return ['Cookie' => explode(';', $header, 2)[0] ?? ''];
     }
 }
