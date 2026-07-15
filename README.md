@@ -36,6 +36,20 @@ php scripts/check-agency-api.php
 
 Le diagnostic Agency doit etre execute uniquement dans un environnement autorise. Il ne journalise aucun secret.
 
+## Centre de validation
+
+Le module est active avec `ENABLE_APPROVAL_CENTER=true` apres migration et recette. Il conserve localement les assignations, commentaires, decisions et historiques sans modifier les donnees Agency.
+
+Dans cette version, les donnees Agency restent strictement en lecture seule et `AGENCY_API_AUTH_REQUIRED=false` suit le contrat actuel du fournisseur. Cette valeur devra etre revue lorsque son mecanisme d'authentification administrative sera disponible.
+
+Pour actualiser la file de validation :
+
+```bash
+php scripts/sync-approval-cases.php
+```
+
+Sur cPanel, planifier cette commande toutes les cinq minutes. Elle est idempotente : les memes ressources sont indexees sans creer de doublons. Les delais de traitement sont configurables depuis les parametres du back office.
+
 ## Deploiement
 
 Le document root du sous-domaine doit pointer vers `public`. Installer les dependances sans outils de developpement, appliquer les migrations, puis verifier `/health/live` et `/health/ready`.

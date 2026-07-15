@@ -18,6 +18,7 @@ final class AdminSeeder
         'finance',
         'administration',
         'settings',
+        'approvals',
     ];
 
     private const PERMISSIONS = [
@@ -37,6 +38,10 @@ final class AdminSeeder
         'administration.view',
         'administration.manage',
         'settings.manage',
+        'approvals.view',
+        'approvals.assign',
+        'approvals.decide',
+        'approvals.manage',
     ];
 
     public static function run(PDO $pdo): void
@@ -75,10 +80,10 @@ final class AdminSeeder
 
         $roleDefinitions = [
             'admin' => ['Administrateur', self::PERMISSIONS],
-            'sales_supervisor' => ['Supervision commerciale', ['dashboard.view', 'sales.view', 'sales.manage', 'inventory.view', 'finance.view']],
-            'operations_manager' => ['Responsable opérations', ['dashboard.view', 'inventory.view', 'inventory.manage', 'operations.view', 'operations.manage', 'team.view', 'team.manage']],
+            'sales_supervisor' => ['Supervision commerciale', ['dashboard.view', 'sales.view', 'sales.manage', 'inventory.view', 'finance.view', 'approvals.view', 'approvals.assign', 'approvals.decide']],
+            'operations_manager' => ['Responsable opérations', ['dashboard.view', 'inventory.view', 'inventory.manage', 'operations.view', 'operations.manage', 'team.view', 'team.manage', 'approvals.view', 'approvals.assign', 'approvals.decide']],
             'finance_manager' => ['Responsable finance', ['dashboard.view', 'finance.view', 'finance.manage', 'sales.view']],
-            'auditor' => ['Contrôle & audit', ['dashboard.view', 'sales.view', 'inventory.view', 'operations.view', 'team.view', 'finance.view', 'administration.view']],
+            'auditor' => ['Contrôle & audit', ['dashboard.view', 'sales.view', 'inventory.view', 'operations.view', 'team.view', 'finance.view', 'administration.view', 'approvals.view']],
         ];
         $roleIds = [];
         foreach ($roleDefinitions as $key => [$name, $permissions]) {

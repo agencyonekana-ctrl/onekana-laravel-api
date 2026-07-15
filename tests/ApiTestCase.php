@@ -37,6 +37,7 @@ abstract class ApiTestCase extends BaseTestCase
         putenv('SYSTEM_API_TOKEN=test-system-token');
         putenv('ENABLE_GEOGRAPHY=true');
         putenv('ENABLE_ADVANCED_FINANCE=true');
+        putenv('ENABLE_APPROVAL_CENTER=true');
         putenv('FRONTEND_URLS=http://localhost:5173,http://127.0.0.1:5173');
 
         $this->pdo = new PDO('sqlite::memory:');

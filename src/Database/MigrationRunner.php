@@ -8,6 +8,8 @@ use Onekana\Api\Database\Migrations\V003ProductionSecurity;
 use Onekana\Api\Database\Migrations\V004RelationalIntegrity;
 use Onekana\Api\Database\Migrations\V005IdentityAndRecovery;
 use Onekana\Api\Database\Migrations\V006RelationalFinance;
+use Onekana\Api\Database\Migrations\V007ApprovalCenter;
+use Onekana\Api\Database\Migrations\V008ApprovalAnomalyPolicy;
 use Onekana\Api\Support\Clock;
 use PDO;
 
@@ -20,6 +22,8 @@ final class MigrationRunner
         '004_relational_integrity' => V004RelationalIntegrity::class,
         '005_identity_and_recovery' => V005IdentityAndRecovery::class,
         '006_relational_finance' => V006RelationalFinance::class,
+        '007_approval_center' => V007ApprovalCenter::class,
+        '008_approval_anomaly_policy' => V008ApprovalAnomalyPolicy::class,
     ];
 
     public function __construct(private readonly PDO $pdo) {}

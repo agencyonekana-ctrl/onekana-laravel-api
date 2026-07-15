@@ -11,6 +11,7 @@ use Onekana\Api\Auth\RefreshTokenStore;
 use Onekana\Api\Auth\TokenRevocationStore;
 use Onekana\Api\Controllers\AgencyController;
 use Onekana\Api\Controllers\AdminUserController;
+use Onekana\Api\Controllers\ApprovalController;
 use Onekana\Api\Controllers\AuthController;
 use Onekana\Api\Controllers\GeographicReviewController;
 use Onekana\Api\Controllers\FinanceController;
@@ -25,6 +26,7 @@ use Onekana\Api\Http\Request;
 use Onekana\Api\Http\Response;
 use Onekana\Api\Http\Router;
 use Onekana\Api\Repositories\ResourceRepository;
+use Onekana\Api\Repositories\ApprovalRepository;
 use Onekana\Api\Repositories\GeographicReviewRepository;
 use Onekana\Api\Repositories\FinanceRepository;
 use Onekana\Api\Repositories\MediaRepository;
@@ -35,6 +37,7 @@ use Onekana\Api\Mail\SmtpMailer;
 use Onekana\Api\Support\Env;
 use Onekana\Api\Support\AuditLogger;
 use Onekana\Api\Support\Json;
+use Onekana\Api\Approvals\ApprovalImporter;
 use PDO;
 use Throwable;
 
@@ -73,13 +76,16 @@ final class App
         $adminUserController = new AdminUserController($this->users, $passwordResets, $mailer);
         $resourceController = new ResourceController($resources, $mediaRepository, $basePath, $privateFiles);
         $systemController = new SystemController($resources);
-        $agencyController = new AgencyController($agency ?? AgencyApiClient::fromEnv());
+        $agencyClient = $agency ?? AgencyApiClient::fromEnv();
+        $agencyController = new AgencyController($agencyClient);
+        $approvalRepository = new ApprovalRepository($pdo);
+        $approvalController = new ApprovalController($approvalRepository, new ApprovalImporter($approvalRepository, $resources, $agencyClient), $this->users, $resources);
         $geographicReviewController = new GeographicReviewController(new GeographicReviewRepository($pdo));
         $mediaController = new MediaController($basePath, $mediaRepository, $resources, $this->users);
         $privateFileController = new PrivateFileController($basePath, $privateFiles);
         $healthController = new HealthController($pdo, $basePath);
 
-        $this->routes($authController, $adminUserController, $resourceController, $systemController, $agencyController, $geographicReviewController, $mediaController, $privateFileController, $healthController, $financeController);
+        $this->routes($authController, $adminUserController, $approvalController, $resourceController, $systemController, $agencyController, $geographicReviewController, $mediaController, $privateFileController, $healthController, $financeController);
     }
 
     public function handle(Request $request): Response
@@ -126,7 +132,7 @@ final class App
         }
     }
 
-    private function routes(AuthController $auth, AdminUserController $adminUsers, ResourceController $resources, SystemController $system, AgencyController $agency, GeographicReviewController $geographicReviews, MediaController $media, PrivateFileController $privateFiles, HealthController $health, FinanceController $finance): void
+    private function routes(AuthController $auth, AdminUserController $adminUsers, ApprovalController $approvals, ResourceController $resources, SystemController $system, AgencyController $agency, GeographicReviewController $geographicReviews, MediaController $media, PrivateFileController $privateFiles, HealthController $health, FinanceController $finance): void
     {
         $this->router->add('GET', '/health/live', fn () => $health->live());
         $this->router->add('GET', '/health/ready', fn () => $health->ready());
@@ -146,6 +152,27 @@ final class App
         $this->router->add('PATCH', '/api/admin/users/{id}', fn (Request $request, array $params) => $adminUsers->update($request, (int) $params['id']), $adminAccess);
         $this->router->add('POST', '/api/admin/users/{id}/invite', fn (Request $request, array $params) => $adminUsers->invite($request, (int) $params['id']), [...$adminAccess, 'rate:admin-invite:10:900']);
         $this->router->add('GET', '/api/admin/roles', fn () => $adminUsers->roles(), $adminAccess);
+
+        if (Env::bool('ENABLE_APPROVAL_CENTER', false)) {
+            $approvalRead = ['auth', 'module:approvals', 'permission:approvals.view'];
+            $approvalAssign = ['auth', 'module:approvals', 'permission:approvals.assign', 'rate:approval-write:90:60'];
+            $approvalDecide = ['auth', 'module:approvals', 'permission:approvals.decide', 'rate:approval-write:90:60'];
+            $approvalManage = ['auth', 'module:approvals', 'permission:approvals.manage', 'rate:approval-import:10:300'];
+            $this->router->add('GET', '/api/admin/overview', fn (Request $request) => $approvals->overview($request), $approvalRead);
+            $this->router->add('GET', '/api/admin/cases', fn (Request $request) => $approvals->index($request), $approvalRead);
+            $this->router->add('POST', '/api/admin/cases', fn (Request $request) => $approvals->store($request), $approvalDecide);
+            $this->router->add('GET', '/api/admin/cases/assignees', fn (Request $request) => $approvals->assignees($request), $approvalRead);
+            $this->router->add('GET', '/api/admin/cases/{id}', fn (Request $request, array $params) => $approvals->show($request, (int) $params['id']), $approvalRead);
+            $this->router->add('PATCH', '/api/admin/cases/{id}', fn (Request $request, array $params) => $approvals->update($request, (int) $params['id']), $approvalAssign);
+            $this->router->add('POST', '/api/admin/cases/{id}/transition', fn (Request $request, array $params) => $approvals->transition($request, (int) $params['id']), $approvalDecide);
+            $this->router->add('GET', '/api/admin/cases/{id}/comments', fn (Request $request, array $params) => $approvals->comments($request, (int) $params['id']), $approvalRead);
+            $this->router->add('POST', '/api/admin/cases/{id}/comments', fn (Request $request, array $params) => $approvals->addComment($request, (int) $params['id']), $approvalDecide);
+            $this->router->add('GET', '/api/admin/cases/{id}/events', fn (Request $request, array $params) => $approvals->events($request, (int) $params['id']), $approvalRead);
+            $this->router->add('POST', '/api/admin/cases/import', fn (Request $request) => $approvals->import($request), $approvalManage);
+            $this->router->add('GET', '/api/admin/validation-settings', fn (Request $request) => $approvals->settings($request), $approvalRead);
+            $this->router->add('PUT', '/api/admin/validation-settings', fn (Request $request) => $approvals->saveSettings($request), $approvalManage);
+            $this->router->add('GET', '/api/admin/audit-log', fn (Request $request) => $approvals->audit($request), $approvalRead);
+        }
 
         $financeRead = ['auth', 'module:finance', 'permission:finance.view'];
         $financeWrite = ['auth', 'module:finance', 'permission:finance.manage', 'rate:finance-write:60:60'];
