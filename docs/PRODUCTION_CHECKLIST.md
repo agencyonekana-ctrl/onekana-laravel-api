@@ -30,7 +30,7 @@
 ## Lancement pilote
 
 - Activer dashboard, contacts, campagnes en lecture, utilisateurs, inventaire et organisation.
-- Garder la geographie masquee tant que les ressources distantes sont indisponibles.
+- Verifier que les trois ressources geographiques repondent avant la recette; l'interface conserve un etat d'indisponibilite propre dans l'intervalle.
 - Garder Wallet et Comptabilite masques tant que les invariants comptables ne sont pas garantis.
 - Ne pas autoriser les ecritures Agency sans contrat et permission dediee.
 

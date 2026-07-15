@@ -155,7 +155,7 @@ final class App
         $this->router->add('GET', '/api/agency/contacts', fn (Request $request) => $agency->contacts($request), $agencyRead);
         $this->router->add('GET', '/api/agency/contacts/{id}', fn (Request $request, array $params) => $agency->contact((int) $params['id']), $agencyRead);
 
-        if (Env::bool('ENABLE_GEOGRAPHY', false)) {
+        if (Env::bool('ENABLE_GEOGRAPHY', true)) {
             $geographicRead = ['auth', 'module:inventory', 'permission:inventory.view'];
             foreach (['communes', 'points-chauds', 'trajets'] as $entity) {
                 $this->router->add('GET', "/api/agency/geographic/{$entity}", fn (Request $request) => $agency->geographic($request, $entity), $geographicRead);

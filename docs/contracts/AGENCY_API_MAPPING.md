@@ -10,7 +10,7 @@ Le back office admin ne consomme pas l'API Agency directement. Il appelle unique
 
 Le mode temporaire utilise `https://manager.onekana-agency.com/api` sans authentification Agency. Le JWT administrateur ONEKANA reste obligatoire pour joindre ce proxy. Seules les lectures `users`, `campaigns` et `contacts` sont autorisees dans ce mode; les modifications distantes restent bloquees.
 
-Les routes geographiques ne sont pas actives tant que le fournisseur retourne `404`. Lorsqu'un mecanisme de service sera fourni, activer `AGENCY_API_AUTH_REQUIRED=true`, renseigner les secrets uniquement dans le `.env` non versionne, puis executer `php scripts/check-agency-api.php`.
+Les routes geographiques sont publiees par le back office et affichent un etat d'indisponibilite tant que le fournisseur retourne `404`. Lorsqu'un mecanisme de service sera fourni, conserver `AGENCY_API_AUTH_REQUIRED=true`, renseigner les secrets uniquement dans le `.env` non versionne, puis executer `php scripts/check-agency-api.php`.
 
 ## Mapping
 
