@@ -6,6 +6,8 @@ use Onekana\Api\Database\Migrations\V001InitialSchema;
 use Onekana\Api\Database\Migrations\V002MediaAndGeography;
 use Onekana\Api\Database\Migrations\V003ProductionSecurity;
 use Onekana\Api\Database\Migrations\V004RelationalIntegrity;
+use Onekana\Api\Database\Migrations\V005IdentityAndRecovery;
+use Onekana\Api\Database\Migrations\V006RelationalFinance;
 use Onekana\Api\Support\Clock;
 use PDO;
 
@@ -16,6 +18,8 @@ final class MigrationRunner
         '002_media_and_geography' => V002MediaAndGeography::class,
         '003_production_security' => V003ProductionSecurity::class,
         '004_relational_integrity' => V004RelationalIntegrity::class,
+        '005_identity_and_recovery' => V005IdentityAndRecovery::class,
+        '006_relational_finance' => V006RelationalFinance::class,
     ];
 
     public function __construct(private readonly PDO $pdo) {}

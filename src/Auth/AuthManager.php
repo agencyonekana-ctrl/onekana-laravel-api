@@ -32,6 +32,9 @@ final class AuthManager
         if (! $user || ! $this->users->isActive($user)) {
             throw new HttpException(401, 'Unauthenticated.');
         }
+        if ((int) ($payload['sv'] ?? 0) !== (int) ($user['session_version'] ?? 1)) {
+            throw new HttpException(401, 'Unauthenticated.');
+        }
 
         $request->set('jwt_payload', $payload);
         $request->set('jwt_token', $token);

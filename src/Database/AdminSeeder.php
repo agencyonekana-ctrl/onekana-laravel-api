@@ -66,21 +66,26 @@ final class AdminSeeder
 
         $permissionIds = [];
         foreach (self::PERMISSIONS as $key) {
-            $permissionIds[] = self::upsert($pdo, 'permissions', 'key', $key, [
+            $permissionIds[$key] = self::upsert($pdo, 'permissions', 'key', $key, [
                 'name' => $key,
                 'created_at' => $now,
                 'updated_at' => $now,
             ]);
         }
 
-        $roleId = self::upsert($pdo, 'roles', 'key', 'admin', [
-            'name' => 'Administrateur',
-            'created_at' => $now,
-            'updated_at' => $now,
-        ]);
-
-        foreach ($permissionIds as $permissionId) {
-            self::attach($pdo, 'permission_role', ['permission_id' => $permissionId, 'role_id' => $roleId]);
+        $roleDefinitions = [
+            'admin' => ['Administrateur', self::PERMISSIONS],
+            'sales_supervisor' => ['Supervision commerciale', ['dashboard.view', 'sales.view', 'sales.manage', 'inventory.view', 'finance.view']],
+            'operations_manager' => ['Responsable opérations', ['dashboard.view', 'inventory.view', 'inventory.manage', 'operations.view', 'operations.manage', 'team.view', 'team.manage']],
+            'finance_manager' => ['Responsable finance', ['dashboard.view', 'finance.view', 'finance.manage', 'sales.view']],
+            'auditor' => ['Contrôle & audit', ['dashboard.view', 'sales.view', 'inventory.view', 'operations.view', 'team.view', 'finance.view', 'administration.view']],
+        ];
+        $roleIds = [];
+        foreach ($roleDefinitions as $key => [$name, $permissions]) {
+            $roleIds[$key] = self::upsert($pdo, 'roles', 'key', $key, ['name' => $name, 'created_at' => $now, 'updated_at' => $now]);
+            foreach ($permissions as $permission) {
+                self::attach($pdo, 'permission_role', ['permission_id' => $permissionIds[$permission], 'role_id' => $roleIds[$key]]);
+            }
         }
 
         $email = trim((string) Env::get('ADMIN_EMAIL', ''));
@@ -115,7 +120,7 @@ final class AdminSeeder
             $userId = self::insert($pdo, 'users', $attributes);
         }
 
-        self::attach($pdo, 'role_user', ['role_id' => $roleId, 'user_id' => $userId]);
+        self::attach($pdo, 'role_user', ['role_id' => $roleIds['admin'], 'user_id' => $userId]);
     }
 
     private static function upsert(PDO $pdo, string $table, string $column, string $value, array $attributes): int

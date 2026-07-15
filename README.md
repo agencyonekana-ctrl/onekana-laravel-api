@@ -40,4 +40,4 @@ Le diagnostic Agency doit etre execute uniquement dans un environnement autorise
 
 Le document root du sous-domaine doit pointer vers `public`. Installer les dependances sans outils de developpement, appliquer les migrations, puis verifier `/health/live` et `/health/ready`.
 
-La procedure complete, la sauvegarde et le retour arriere sont decrits dans `docs/PRODUCTION_CHECKLIST.md`.
+La remise cPanel/Vercel est décrite dans `docs/PRODUCTION_HANDOFF.md`. La sauvegarde, les risques acceptés et le retour arrière sont détaillés dans `docs/PRODUCTION_CHECKLIST.md`.

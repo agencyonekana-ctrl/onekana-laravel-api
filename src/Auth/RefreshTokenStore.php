@@ -77,6 +77,12 @@ final class RefreshTokenStore
         $statement->execute(['revoked_at' => Clock::now(), 'hash' => hash('sha256', $token)]);
     }
 
+    public function revokeAllForUser(int $userId): void
+    {
+        $statement = $this->pdo->prepare('UPDATE refresh_tokens SET revoked_at = :revoked_at WHERE user_id = :user_id AND revoked_at IS NULL');
+        $statement->execute(['revoked_at' => Clock::now(), 'user_id' => $userId]);
+    }
+
     private function cleanup(): void
     {
         $statement = $this->pdo->prepare('DELETE FROM refresh_tokens WHERE expires_at < :now');

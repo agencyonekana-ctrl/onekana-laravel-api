@@ -10,11 +10,13 @@ use Onekana\Api\Http\Request;
 use Onekana\Api\Http\Response;
 use PDO;
 use PHPUnit\Framework\TestCase as BaseTestCase;
+use Tests\Support\FakeMailer;
 
 abstract class ApiTestCase extends BaseTestCase
 {
     protected PDO $pdo;
     protected App $app;
+    protected FakeMailer $mailer;
 
     protected function setUp(): void
     {
@@ -43,7 +45,8 @@ abstract class ApiTestCase extends BaseTestCase
         Connection::reset($this->pdo);
         Schema::migrate($this->pdo);
 
-        $this->app = new App(dirname(__DIR__), $this->pdo);
+        $this->mailer = new FakeMailer();
+        $this->app = new App(dirname(__DIR__), $this->pdo, null, $this->mailer);
     }
 
     protected function seedAdmin(): void

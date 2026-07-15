@@ -24,3 +24,38 @@ jobs:
       - name: Check PHP syntax
         shell: bash
         run: find src tests scripts -name '*.php' -print0 | xargs -0 -n1 php -l
+
+  mariadb-migrations:
+    runs-on: ubuntu-latest
+    services:
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_DATABASE: onekana_test
+          MARIADB_USER: onekana
+          MARIADB_PASSWORD: onekana_test_password
+          MARIADB_ROOT_PASSWORD: root_test_password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_mysql, fileinfo, mbstring
+          coverage: none
+      - run: composer install --no-interaction --prefer-dist
+      - run: php scripts/check-production-schema.php
+        env:
+          APP_ENV: testing
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: onekana_test
+          DB_USERNAME: onekana
+          DB_PASSWORD: onekana_test_password

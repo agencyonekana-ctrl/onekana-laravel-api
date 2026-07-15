@@ -22,6 +22,7 @@ final class JwtService
             'exp' => $now + $ttl,
             'sub' => (string) $user['id'],
             'email' => $user['email'],
+            'sv' => (int) ($user['session_version'] ?? 1),
             'jti' => $jti,
         ];
 

@@ -1,42 +1,49 @@
-# Checklist de production ONEKANA API
+# Checklist de production ONEKANA
 
-## Avant deploiement
+## Validation avant remise
 
-- Executer `composer validate --strict`, `composer test` et `composer audit`.
-- Utiliser une base et des secrets distincts pour staging et production.
-- Configurer `APP_ENV=production`, `APP_DEBUG=false` et une URL HTTPS.
-- Generer `JWT_SECRET` et `SYSTEM_API_TOKEN` avec au moins 32 octets aleatoires.
-- Limiter `FRONTEND_URLS` au domaine admin officiel.
-- Garder `AGENCY_API_AUTH_REQUIRED=true`; ne jamais deployer le mode public temporaire.
-- Laisser `ADMIN_PASSWORD` vide apres le provisionnement initial.
-- Verifier que l'authentification multifacteur est activee avant l'ouverture hors pilote.
+- `composer validate --strict`, `composer test` et `composer audit` sont verts.
+- Les migrations passent deux fois sur une base MariaDB vide.
+- Le frontend passe lint, tests, build, audit et E2E.
+- Aucun fichier `.env`, certificat, clé, sauvegarde ou identifiant réel n'est versionné.
+- `AGENCY_API_AUTH_REQUIRED=true` et le diagnostic Agency ne journalise aucun secret.
+- Une recette est terminée sur un environnement de staging distinct.
 
-## Deploiement cPanel
+## Déploiement cPanel
 
-1. Pointer `api-admin.onekana.com` vers le dossier `public` du projet.
+1. Pointer le document root du sous-domaine vers `onekana-api/public`.
 2. Installer avec `composer install --no-dev --optimize-autoloader`.
-3. Executer `php scripts/migrate.php` une seule fois par version deployee.
-4. Activer HTTPS force depuis cPanel.
-5. Verifier `/health/live` puis `/health/ready`.
-6. Tester une connexion, un acces refuse et le telechargement d'un document prive.
+3. Donner au compte PHP l'écriture sur `storage/private` et `storage/cache`, jamais sur le code.
+4. Renseigner l'environnement à partir de `.env.example` avec des secrets uniques.
+5. Exécuter `php scripts/migrate.php`, puis `php scripts/seed-admin.php` une seule fois.
+6. Supprimer `ADMIN_PASSWORD` de l'environnement dès la première connexion réussie.
+7. Forcer HTTPS et vérifier `/health/live` puis `/health/ready`.
+8. Tester connexion, récupération par e-mail, accès refusé et document privé.
+
+## Finance
+
+- Importer un plan comptable validé avant d'activer les fonctions avancées.
+- Créer les journaux puis configurer ventes, créances, taxe, banque, Wallet et charges.
+- Vérifier que `/health/ready` indique `finance: ok` avant `ENABLE_ADVANCED_FINANCE=true`.
+- Faire valider le paramétrage et les états produits par un professionnel compétent. Le logiciel ne constitue pas à lui seul une certification de conformité SYSCOHADA.
 
 ## Sauvegarde et restauration
 
-- Planifier chaque jour `scripts/backup-production.sh` avec des variables injectees par cPanel.
-- Conserver les sauvegardes chiffrees hors du dossier public et sur un stockage distant.
-- Tester une restauration sur staging avant l'ouverture, puis chaque trimestre.
-- Documenter le temps de restauration et la derniere sauvegarde valide.
+- Planifier chaque jour `scripts/backup-production.sh` avec les variables du cron.
+- Conserver les archives chiffrées hors du dossier public et sur un stockage distinct.
+- Tester `scripts/restore-production.sh` sur staging avant ouverture, puis chaque trimestre.
+- Faire une sauvegarde avant chaque migration et conserver la version applicative précédente.
 
-## Lancement pilote
+## Risques acceptés
 
-- Activer dashboard, contacts, campagnes en lecture, utilisateurs, inventaire et organisation.
-- Verifier que les trois ressources geographiques repondent avant la recette; l'interface conserve un etat d'indisponibilite propre dans l'intervalle.
-- Garder Wallet et Comptabilite masques tant que les invariants comptables ne sont pas garantis.
-- Ne pas autoriser les ecritures Agency sans contrat et permission dediee.
+- L'authentification multifacteur n'est pas incluse dans cette version. Le risque doit être réévalué avant d'ouvrir des comptes privilégiés hors de l'équipe interne.
+- Les ressources Agency restent dépendantes de leur disponibilité; une panne ne doit pas bloquer les modules internes.
+- Les données Agency sont en lecture seule. Les contrôles administratifs sont stockés localement.
 
-## Retour arriere
+## Retour arrière
 
-- Conserver le build et le code serveur precedents.
-- Faire une sauvegarde avant chaque migration.
-- En cas d'echec, restaurer le code precedent puis la base uniquement si la migration est incompatible.
-- Ne jamais improviser une suppression de tables en production.
+1. Mettre l'application en maintenance et conserver les journaux.
+2. Sauvegarder l'état courant avant toute manipulation.
+3. Restaurer le code du dernier paquet validé.
+4. Restaurer la base uniquement si la migration est incompatible et après validation de l'archive.
+5. Relancer migrations, readiness et recette critique avant réouverture.

@@ -5,12 +5,15 @@ namespace Onekana\Api;
 use Onekana\Api\Agency\AgencyApiClient;
 use Onekana\Api\Auth\AuthManager;
 use Onekana\Api\Auth\JwtService;
+use Onekana\Api\Auth\PasswordResetStore;
 use Onekana\Api\Auth\RateLimiter;
 use Onekana\Api\Auth\RefreshTokenStore;
 use Onekana\Api\Auth\TokenRevocationStore;
 use Onekana\Api\Controllers\AgencyController;
+use Onekana\Api\Controllers\AdminUserController;
 use Onekana\Api\Controllers\AuthController;
 use Onekana\Api\Controllers\GeographicReviewController;
+use Onekana\Api\Controllers\FinanceController;
 use Onekana\Api\Controllers\HealthController;
 use Onekana\Api\Controllers\MediaController;
 use Onekana\Api\Controllers\PrivateFileController;
@@ -23,9 +26,12 @@ use Onekana\Api\Http\Response;
 use Onekana\Api\Http\Router;
 use Onekana\Api\Repositories\ResourceRepository;
 use Onekana\Api\Repositories\GeographicReviewRepository;
+use Onekana\Api\Repositories\FinanceRepository;
 use Onekana\Api\Repositories\MediaRepository;
 use Onekana\Api\Repositories\PrivateFileRepository;
 use Onekana\Api\Repositories\UserRepository;
+use Onekana\Api\Mail\Mailer;
+use Onekana\Api\Mail\SmtpMailer;
 use Onekana\Api\Support\Env;
 use Onekana\Api\Support\AuditLogger;
 use Onekana\Api\Support\Json;
@@ -40,7 +46,7 @@ final class App
     private RateLimiter $rateLimiter;
     private AuditLogger $auditLogger;
 
-    public function __construct(private readonly string $basePath, ?PDO $pdo = null, ?AgencyApiClient $agency = null)
+    public function __construct(private readonly string $basePath, ?PDO $pdo = null, ?AgencyApiClient $agency = null, ?Mailer $mailer = null)
     {
         Env::load($basePath);
         if ($pdo) {
@@ -58,17 +64,22 @@ final class App
         $resources = new ResourceRepository($pdo);
         $mediaRepository = new MediaRepository($pdo);
         $privateFiles = new PrivateFileRepository($pdo);
+        $financeController = new FinanceController(new FinanceRepository($pdo));
 
-        $authController = new AuthController($this->auth, $jwt, $this->rateLimiter, new RefreshTokenStore($pdo), $this->users);
+        $refreshTokens = new RefreshTokenStore($pdo);
+        $passwordResets = new PasswordResetStore($pdo);
+        $mailer ??= new SmtpMailer();
+        $authController = new AuthController($this->auth, $jwt, $this->rateLimiter, $refreshTokens, $passwordResets, $this->users, $mailer);
+        $adminUserController = new AdminUserController($this->users, $passwordResets, $mailer);
         $resourceController = new ResourceController($resources, $mediaRepository, $basePath, $privateFiles);
         $systemController = new SystemController($resources);
         $agencyController = new AgencyController($agency ?? AgencyApiClient::fromEnv());
         $geographicReviewController = new GeographicReviewController(new GeographicReviewRepository($pdo));
         $mediaController = new MediaController($basePath, $mediaRepository, $resources, $this->users);
         $privateFileController = new PrivateFileController($basePath, $privateFiles);
-        $healthController = new HealthController($pdo);
+        $healthController = new HealthController($pdo, $basePath);
 
-        $this->routes($authController, $resourceController, $systemController, $agencyController, $geographicReviewController, $mediaController, $privateFileController, $healthController);
+        $this->routes($authController, $adminUserController, $resourceController, $systemController, $agencyController, $geographicReviewController, $mediaController, $privateFileController, $healthController, $financeController);
     }
 
     public function handle(Request $request): Response
@@ -115,7 +126,7 @@ final class App
         }
     }
 
-    private function routes(AuthController $auth, ResourceController $resources, SystemController $system, AgencyController $agency, GeographicReviewController $geographicReviews, MediaController $media, PrivateFileController $privateFiles, HealthController $health): void
+    private function routes(AuthController $auth, AdminUserController $adminUsers, ResourceController $resources, SystemController $system, AgencyController $agency, GeographicReviewController $geographicReviews, MediaController $media, PrivateFileController $privateFiles, HealthController $health, FinanceController $finance): void
     {
         $this->router->add('GET', '/health/live', fn () => $health->live());
         $this->router->add('GET', '/health/ready', fn () => $health->ready());
@@ -123,9 +134,49 @@ final class App
         $this->router->add('GET', '/api/health/ready', fn () => $health->ready());
 
         $this->router->add('POST', '/api/auth/login', fn (Request $request) => $auth->login($request), ['origin']);
+        $this->router->add('POST', '/api/auth/forgot-password', fn (Request $request) => $auth->forgotPassword($request), ['origin', 'rate:forgot-password:5:900']);
+        $this->router->add('POST', '/api/auth/reset-password', fn (Request $request) => $auth->resetPassword($request), ['origin', 'rate:reset-password:10:900']);
         $this->router->add('GET', '/api/auth/me', fn (Request $request) => $auth->me($request), ['auth']);
         $this->router->add('POST', '/api/auth/refresh', fn (Request $request) => $auth->refresh($request), ['origin', 'rate:refresh:20:60']);
         $this->router->add('POST', '/api/auth/logout', fn (Request $request) => $auth->logout($request), ['origin', 'rate:logout:20:60']);
+
+        $adminAccess = ['auth', 'module:administration', 'permission:administration.manage'];
+        $this->router->add('GET', '/api/admin/users', fn (Request $request) => $adminUsers->index($request), $adminAccess);
+        $this->router->add('POST', '/api/admin/users', fn (Request $request) => $adminUsers->store($request), [...$adminAccess, 'rate:admin-users:20:60']);
+        $this->router->add('PATCH', '/api/admin/users/{id}', fn (Request $request, array $params) => $adminUsers->update($request, (int) $params['id']), $adminAccess);
+        $this->router->add('POST', '/api/admin/users/{id}/invite', fn (Request $request, array $params) => $adminUsers->invite($request, (int) $params['id']), [...$adminAccess, 'rate:admin-invite:10:900']);
+        $this->router->add('GET', '/api/admin/roles', fn () => $adminUsers->roles(), $adminAccess);
+
+        $financeRead = ['auth', 'module:finance', 'permission:finance.view'];
+        $financeWrite = ['auth', 'module:finance', 'permission:finance.manage', 'rate:finance-write:60:60'];
+        $this->router->add('GET', '/api/invoices', fn (Request $request) => $finance->invoices($request), $financeRead);
+        $this->router->add('POST', '/api/invoices', fn (Request $request) => $finance->createInvoice($request), $financeWrite);
+        $this->router->add('POST', '/api/invoices/{id}/issue', fn (Request $request, array $params) => $finance->issueInvoice($request, (int) $params['id']), $financeWrite);
+        $this->router->add('GET', '/api/payments', fn (Request $request) => $finance->payments($request), $financeRead);
+        $this->router->add('POST', '/api/payments', fn (Request $request) => $finance->createPayment($request), $financeWrite);
+
+        if (Env::bool('ENABLE_ADVANCED_FINANCE', false)) {
+            $this->router->add('GET', '/api/accounting/accounts', fn (Request $request) => $finance->accounts($request), $financeRead);
+            $this->router->add('POST', '/api/accounting/accounts', fn (Request $request) => $finance->createAccount($request), $financeWrite);
+            $this->router->add('POST', '/api/accounting/accounts/import', fn (Request $request) => $finance->importAccounts($request), $financeWrite);
+            $this->router->add('DELETE', '/api/accounting/accounts/{id}', fn (Request $request, array $params) => $finance->deleteAccount($request, (int) $params['id']), $financeWrite);
+            $this->router->add('GET', '/api/accounting/journals', fn (Request $request) => $finance->journals($request), $financeRead);
+            $this->router->add('POST', '/api/accounting/journals', fn (Request $request) => $finance->createJournal($request), $financeWrite);
+            $this->router->add('DELETE', '/api/accounting/journals/{id}', fn (Request $request, array $params) => $finance->deleteJournal($request, (int) $params['id']), $financeWrite);
+            $this->router->add('GET', '/api/accounting/periods', fn (Request $request) => $finance->periods($request), $financeRead);
+            $this->router->add('POST', '/api/accounting/periods', fn (Request $request) => $finance->createPeriod($request), $financeWrite);
+            $this->router->add('POST', '/api/accounting/periods/{id}/close', fn (Request $request, array $params) => $finance->closePeriod($request, (int) $params['id']), $financeWrite);
+            $this->router->add('GET', '/api/accounting/entries', fn (Request $request) => $finance->entries($request), $financeRead);
+            $this->router->add('POST', '/api/accounting/entries', fn (Request $request) => $finance->createEntry($request), $financeWrite);
+            $this->router->add('POST', '/api/accounting/entries/{id}/reverse', fn (Request $request, array $params) => $finance->reverseEntry($request, (int) $params['id']), $financeWrite);
+            $this->router->add('GET', '/api/accounting/trial-balance', fn (Request $request) => $finance->trialBalance($request), $financeRead);
+            $this->router->add('GET', '/api/accounting/settings', fn (Request $request) => $finance->settings($request), $financeRead);
+            $this->router->add('PUT', '/api/accounting/settings', fn (Request $request) => $finance->saveSettings($request), $financeWrite);
+            $this->router->add('GET', '/api/wallet/accounts', fn (Request $request) => $finance->walletAccounts($request), $financeRead);
+            $this->router->add('POST', '/api/wallet/accounts', fn (Request $request) => $finance->createWalletAccount($request), $financeWrite);
+            $this->router->add('GET', '/api/wallet/transactions', fn (Request $request) => $finance->walletTransactions($request), $financeRead);
+            $this->router->add('POST', '/api/wallet/transactions', fn (Request $request) => $finance->createWalletTransaction($request), $financeWrite);
+        }
 
         $this->router->add('GET', '/api/system/summary', fn (Request $request) => $system->summary($request), ['system']);
         $this->router->add('GET', '/api/system/campaigns', fn (Request $request) => $system->list($request, 'campaigns'), ['system']);
@@ -327,20 +378,7 @@ final class App
             'departments' => ['departments', 'administration', 'administration.view', 'administration.manage'],
             'notifications' => ['notifications', 'dashboard', 'dashboard.view', 'dashboard.manage'],
             'roadmap' => ['roadmap', 'dashboard', 'dashboard.view', 'dashboard.manage'],
-            'invoices' => ['invoices', 'finance', 'finance.view', 'finance.manage'],
-            'payments' => ['payments', 'finance', 'finance.view', 'finance.manage'],
         ];
-
-        if (Env::bool('ENABLE_ADVANCED_FINANCE', false)) {
-            $resources += [
-                'accounting/accounts' => ['accountingAccounts', 'finance', 'finance.view', 'finance.manage'],
-                'accounting/journals' => ['accountingJournals', 'finance', 'finance.view', 'finance.manage'],
-                'accounting/entries' => ['accountingEntries', 'finance', 'finance.view', 'finance.manage'],
-                'accounting/trial-balance' => ['trialBalance', 'finance', 'finance.view', 'finance.manage'],
-                'wallet/accounts' => ['walletAccounts', 'finance', 'finance.view', 'finance.manage'],
-                'wallet/transactions' => ['walletTransactions', 'finance', 'finance.view', 'finance.manage'],
-            ];
-        }
 
         return $resources;
     }

@@ -40,14 +40,6 @@ final class ResourceRepository
         'agendaEvents' => 'agenda_events',
         'notifications' => 'notifications',
         'roadmap' => 'roadmap',
-        'accountingAccounts' => 'accounting_accounts',
-        'accountingJournals' => 'accounting_journals',
-        'accountingEntries' => 'accounting_entries',
-        'trialBalance' => 'accounting_trial_balance',
-        'walletAccounts' => 'wallet_accounts',
-        'walletTransactions' => 'wallet_transactions',
-        'invoices' => 'invoices',
-        'payments' => 'payments',
     ];
 
     public function __construct(private readonly PDO $pdo) {}
